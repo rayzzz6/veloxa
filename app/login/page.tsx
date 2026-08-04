@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const isSignup = mode === "signup";
@@ -23,18 +24,38 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
 
-    const { error } = isSignup
-      ? await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { name } },
-        })
-      : await supabase.auth.signInWithPassword({ email, password });
+    if (isSignup) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      // signUp succeeds even when email confirmation is required, but there's
+      // no session yet in that case — don't redirect, tell the user to confirm.
+      if (!data.session) {
+        setNotice("Check your email for a confirmation link, then log in below.");
+        setMode("login");
+        return;
+      }
+      router.push("/home");
+      return;
+    }
 
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError(error.message);
+      setError(
+        error.message === "Email not confirmed"
+          ? "Please confirm your email first — check your inbox for the confirmation link."
+          : error.message
+      );
       return;
     }
     router.push("/home");
@@ -102,6 +123,7 @@ export default function LoginPage() {
               className="w-full rounded-2xl border border-line bg-white/[0.03] px-4 py-3.5 text-[15px] outline-none focus:border-purple"
             />
 
+            {notice && <p className="text-emerald text-[13px]">{notice}</p>}
             {error && <p className="text-danger text-[13px]">{error}</p>}
 
             <button
